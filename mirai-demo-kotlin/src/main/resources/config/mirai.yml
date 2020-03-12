@@ -1,0 +1,7 @@
+bot:
+  name: MoeNetBot
+  qq: 121351551
+  password: password
+mirai:
+  port: 61551
+  authKey: 5gcjg5DgZPcBGN9vdcRbnD7LkFAwrP2J2zwegPn
