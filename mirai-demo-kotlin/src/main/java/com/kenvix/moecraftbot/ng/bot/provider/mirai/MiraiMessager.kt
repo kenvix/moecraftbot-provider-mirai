@@ -6,22 +6,33 @@
 
 package com.kenvix.moecraftbot.ng.bot.provider.mirai
 
+import com.kenvix.moecraftbot.ng.Defines
+import com.kenvix.moecraftbot.ng.bot.provider.telegram.toBotUpdate
+import com.kenvix.moecraftbot.ng.lib.bot.BotMessage
 import com.kenvix.moecraftbot.ng.lib.bot.BotUpdate
-import kotlinx.coroutines.CompletableJob
-import kotlinx.coroutines.launch
+import com.kenvix.moecraftbot.ng.lib.bot.MessageFrom
+import com.kenvix.moecraftbot.ng.lib.bot.MessageType
+import com.kenvix.utils.log.Logging
+import com.kenvix.utils.log.warning
+import kotlinx.coroutines.*
 import net.mamoe.mirai.Bot
 import net.mamoe.mirai.alsoLogin
 import net.mamoe.mirai.contact.QQ
 import net.mamoe.mirai.contact.isOperator
 import net.mamoe.mirai.contact.sendMessage
 import net.mamoe.mirai.event.*
+import net.mamoe.mirai.getFriendOrNull
+import net.mamoe.mirai.getGroupOrNull
 import net.mamoe.mirai.message.*
 import net.mamoe.mirai.message.data.*
+import net.mamoe.mirai.qqandroid.Bot
+import net.mamoe.mirai.qqandroid.QQAndroid
 import net.mamoe.mirai.utils.FileBasedDeviceInfo
 import java.io.File
+import java.lang.IllegalArgumentException
 
-internal class MiraiMessager(private val context: MiraiBot) {
-    private val bot: Bot = Bot( // JVM 下也可以不写 `QQAndroid.` 引用顶层函数
+internal class MiraiMessager(private val context: MiraiBot): Logging, AutoCloseable {
+    private val bot: Bot = QQAndroid.Bot( // JVM 下也可以不写 `QQAndroid.` 引用顶层函数
         context.options.bot.qq,
         context.options.bot.password
     ) {
@@ -30,22 +41,68 @@ internal class MiraiMessager(private val context: MiraiBot) {
         // networkLoggerSupplier = { SilentLogger } // 禁用网络层输出
     }
 
+    private val job = Job()
+    private val scope: CoroutineScope = CoroutineScope(Dispatchers.IO + job)
+
     suspend fun login() {
         bot.login()
 
         //bot.messageDSL()
         subscribeMessage()
         directlySubscribe(bot)
-
-        bot.join() //等到直到断开连接
     }
+
+    override fun getLogTag(): String = "MiraiMessager"
 
     private fun subscribeMessage() {
         bot.subscribeMessages {
             always {
-                context.onMessage(this.toBotUpdate(), this.message.toString())
+                Defines.cachedThreadPool.execute {
+                    val msg = this.message.toString()
+
+                    if (msg.isNotEmpty() && (context.isTextMessageFeatureSupported || context.isCommandFeatureSupported)) {
+                        if (context.isCommandFeatureSupported && context.isCommandMessage(msg)) {
+                            //Bot command
+                            try {
+                                context.onCommand(this.toBotUpdate(), msg)
+                            } catch (e: Exception) {
+                                logger.warning(e, "Bot command handler failed: $msg . Exception: ${e.message}")
+                            }
+                        } else {
+                            context.onMessage(this.toBotUpdate(), msg)
+                        }
+                    }
+                }
             }
         }
+    }
+
+    fun sendMessage(chatId: Long, message: String, type: MessageType, replyToMessageId: Long?, messageFrom: MessageFrom): BotMessage {
+        return when (messageFrom) {
+            MessageFrom.Private -> {
+                val user = bot.getFriend(chatId)
+                val msg = runBlocking { user.sendMessage(message) }
+                msg.toBotMessage(message)
+            }
+
+            MessageFrom.Group -> {
+                val group = bot.getGroup(chatId)
+                val msg = runBlocking { group.sendMessage(message) }
+                msg.toBotMessage(message)
+            }
+
+            else -> {
+                 throw IllegalArgumentException("Not supported message from $messageFrom on chatid $chatId. message: $message")
+            }
+        }
+    }
+
+    fun deleteMessage(chatId: Long, messageId: Long) {
+
+    }
+
+    override fun close() {
+        job.cancel()
     }
 
     /**

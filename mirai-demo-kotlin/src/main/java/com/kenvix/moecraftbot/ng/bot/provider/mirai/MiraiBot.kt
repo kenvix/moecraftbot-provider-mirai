@@ -6,23 +6,13 @@
 
 package com.kenvix.moecraftbot.ng.bot.provider.mirai
 
-import com.kenvix.moecraftbot.ng.bot.provider.mirai.contact.AuthData
-import com.kenvix.moecraftbot.ng.bot.provider.mirai.contact.api.MiraiAuth
-import com.kenvix.moecraftbot.ng.lib.bot.AbstractBotProvider
-import com.kenvix.moecraftbot.ng.lib.bot.BotMessage
-import com.kenvix.moecraftbot.ng.lib.bot.MessageType
-import com.kenvix.moecraftbot.ng.lib.exception.InvalidAuthorizationException
-import demo.subscribe.directlySubscribe
-import demo.subscribe.messageDSL
+import com.kenvix.moecraftbot.ng.lib.bot.*
 import kotlinx.coroutines.runBlocking
-import net.mamoe.mirai.Bot
-import net.mamoe.mirai.alsoLogin
-import net.mamoe.mirai.utils.FileBasedDeviceInfo
+import net.mamoe.mirai.BotFactory
 import okhttp3.OkHttpClient
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import java.util.concurrent.TimeUnit
-import kotlin.math.log
 
 
 class MiraiBot: AbstractBotProvider<MiraiOptions>() {
@@ -38,6 +28,13 @@ class MiraiBot: AbstractBotProvider<MiraiOptions>() {
     private lateinit var sessionKey: String
     private lateinit var messager: MiraiMessager
 
+    val isMessageFeatureSupported =
+        driver.isAnyFeatureSupported(DriverFeature.TextMessage, DriverFeature.MixedMessage, DriverFeature.File)
+    val isTextMessageFeatureSupported =
+        driver.isAnyFeatureSupported(DriverFeature.TextMessage, DriverFeature.MixedMessage)
+    val isCommandFeatureSupported = driver.isFeatureSupported(DriverFeature.Command)
+    val isEventFeatureSupported = driver.isFeatureSupported(DriverFeature.Event)
+
     override fun getLogTag(): String = "MiraiBotProvider"
 
 
@@ -47,6 +44,8 @@ class MiraiBot: AbstractBotProvider<MiraiOptions>() {
 
         okHttpClient = OkHttpClient.Builder().readTimeout(5, TimeUnit.SECONDS).connectTimeout(1, TimeUnit.SECONDS).build()
         retrofit = Retrofit.Builder().baseUrl(apiUrl).addConverterFactory(GsonConverterFactory.create()).build()
+        Class.forName("net.mamoe.mirai.qqandroid.QQAndroid")
+
         messager = MiraiMessager(this)
 
         runBlocking { messager.login() }
@@ -58,8 +57,36 @@ class MiraiBot: AbstractBotProvider<MiraiOptions>() {
     private val apiUrl: String
             get() = "http://localhost:${options.mirai.port}"
 
-    override fun sendMessage(chatId: Long, message: String, type: MessageType, replyToMessageId: Long?): BotMessage {
-        TODO()
+    override fun sendMessage(chatId: Long, message: String, type: MessageType, replyToMessageId: Long?, messageFrom: MessageFrom): BotMessage
+        = messager.sendMessage(chatId, message, type, replyToMessageId, messageFrom)
+
+    override fun banUser(chatId: Long, userId: Long, duration: Int) {
+        super.banUser(chatId, userId, duration)
+    }
+
+    override fun deleteMessage(chatId: Long, messageId: Long) {
+        super.deleteMessage(chatId, messageId)
+
+    }
+
+    override fun kickUser(chatId: Long, userId: Long) {
+        super.kickUser(chatId, userId)
+    }
+
+    override fun muteUser(chatId: Long, userId: Long, duration: Int) {
+        super.muteUser(chatId, userId, duration)
+    }
+
+    override fun onCommand(update: BotUpdate<*>, commandText: String) {
+        super.onCommand(update, commandText)
+    }
+
+    override fun onEvent(update: BotUpdate<*>, eventType: MessageType) {
+        super.onEvent(update, eventType)
+    }
+
+    override fun onUpgrade(newVersionCode: Int, oldVersionCode: Int) {
+        super.onUpgrade(newVersionCode, oldVersionCode)
     }
 
     override fun onSystemConsoleInput(input: String): Boolean {
