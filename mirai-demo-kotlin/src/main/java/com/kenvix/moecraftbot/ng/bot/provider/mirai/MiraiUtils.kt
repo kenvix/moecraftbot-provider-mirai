@@ -11,6 +11,8 @@ import net.mamoe.mirai.message.MessagePacket
 import net.mamoe.mirai.message.MessageReceipt
 import net.mamoe.mirai.message.data.*
 import net.mamoe.mirai.utils.MiraiExperimentalAPI
+import java.util.*
+import kotlin.collections.ArrayList
 
 fun MessagePacket<*, *>.toBotUpdate(): BotUpdate<MessagePacket<*, *>> {
     var messageType: MessageType? = null
@@ -26,8 +28,16 @@ fun MessagePacket<*, *>.toBotUpdate(): BotUpdate<MessagePacket<*, *>> {
     if (messageType == null)
         messageType = MessageType.Text
 
-    var extraData: BotExtraData? = null
+    var extraPhoto: MutableList<MiraiExtraPhoto>? = null
+    if (messageType == MessageType.Photo) {
+        extraPhoto = ArrayList<MiraiExtraPhoto>(message.count())
+        this.message.filterIsInstance<CustomFaceFromFile>().forEach { extraPhoto.add(MiraiExtraPhoto(it)) }
+    }
 
+    var extraData: BotExtraData? = null
+    if (extraPhoto != null) {
+        extraData = BotExtraData(photos = extraPhoto)
+    }
 
     return BotUpdate(
         updateObject = this,
@@ -35,9 +45,11 @@ fun MessagePacket<*, *>.toBotUpdate(): BotUpdate<MessagePacket<*, *>> {
             id = this.message.id,
             sender = this.sender.toBotUser(),
             messageFrom = this.messageFrom,
+            date = Date(),
             messageType = messageType,
             replyToMessage = if (quote != null) BotMessage(
                 id = quote.source.id,
+                date = Date(quote.source.time),
                 sender = botUserOf(id = quote.source.senderId),
                 messageFrom = this.messageFrom,
                 messageType = MessageType.Text,
@@ -51,10 +63,11 @@ fun MessagePacket<*, *>.toBotUpdate(): BotUpdate<MessagePacket<*, *>> {
     )
 }
 
-fun MessageReceipt<*>.toBotMessage(text: String): BotMessage {
+fun MessageReceipt<*>.toBotMessage(id: Long, text: String): BotMessage {
     return BotMessage(
-        id = this.source.id,
+        id = id,
         sender = null,
+        date = Date(this.source.time),
         messageFrom = if (isToGroup) MessageFrom.Group else MessageFrom.Private,
         messageType = MessageType.Text,
         messageText = text,

@@ -8,18 +8,14 @@ package com.kenvix.moecraftbot.ng.bot.provider.mirai
 
 import com.kenvix.moecraftbot.ng.Defines
 import com.kenvix.moecraftbot.ng.bot.provider.telegram.toBotUpdate
-import com.kenvix.moecraftbot.ng.lib.bot.BotMessage
-import com.kenvix.moecraftbot.ng.lib.bot.BotUpdate
-import com.kenvix.moecraftbot.ng.lib.bot.MessageFrom
+import com.kenvix.moecraftbot.ng.lib.bot.*
 import com.kenvix.moecraftbot.ng.lib.bot.MessageType
 import com.kenvix.utils.log.Logging
 import com.kenvix.utils.log.warning
 import kotlinx.coroutines.*
 import net.mamoe.mirai.Bot
 import net.mamoe.mirai.alsoLogin
-import net.mamoe.mirai.contact.QQ
-import net.mamoe.mirai.contact.isOperator
-import net.mamoe.mirai.contact.sendMessage
+import net.mamoe.mirai.contact.*
 import net.mamoe.mirai.event.*
 import net.mamoe.mirai.getFriendOrNull
 import net.mamoe.mirai.getGroupOrNull
@@ -28,6 +24,8 @@ import net.mamoe.mirai.message.data.*
 import net.mamoe.mirai.qqandroid.Bot
 import net.mamoe.mirai.qqandroid.QQAndroid
 import net.mamoe.mirai.utils.FileBasedDeviceInfo
+import net.mamoe.mirai.utils.SilentLogger
+import net.mamoe.mirai.utils.toExternalImage
 import java.io.File
 import java.lang.IllegalArgumentException
 
@@ -38,7 +36,7 @@ internal class MiraiMessager(private val context: MiraiBot): Logging, AutoClosea
     ) {
         // 覆盖默认的配置
         +FileBasedDeviceInfo // 使用 "device.json" 保存设备信息
-        // networkLoggerSupplier = { SilentLogger } // 禁用网络层输出
+        //networkLoggerSupplier = { SilentLogger } // 禁用网络层输出
     }
 
     private val job = Job()
@@ -77,18 +75,17 @@ internal class MiraiMessager(private val context: MiraiBot): Logging, AutoClosea
         }
     }
 
-    fun sendMessage(chatId: Long, message: String, type: MessageType, replyToMessageId: Long?, messageFrom: MessageFrom): BotMessage {
+    fun sendMessage(chatId: Long, message: String, type: MessageType,
+                    replyToMessageId: Long?, messageFrom: MessageFrom, extraData: BotExtraData?): BotMessage {
         return when (messageFrom) {
             MessageFrom.Private -> {
                 val user = bot.getFriend(chatId)
-                val msg = runBlocking { user.sendMessage(message) }
-                msg.toBotMessage(message)
+                sendMessageImpl(extraData, user, message)
             }
 
             MessageFrom.Group -> {
                 val group = bot.getGroup(chatId)
-                val msg = runBlocking { group.sendMessage(message) }
-                msg.toBotMessage(message)
+                sendMessageImpl(extraData, group, message)
             }
 
             else -> {
@@ -97,7 +94,27 @@ internal class MiraiMessager(private val context: MiraiBot): Logging, AutoClosea
         }
     }
 
-    fun deleteMessage(chatId: Long, messageId: Long) {
+    private fun sendMessageImpl(extraData: BotExtraData?, user: Contact, message: String): BotMessage {
+        val chainBuilder = MessageChainBuilder()
+
+        if (extraData?.photos != null) {
+            extraData.photos!!.forEach { chainBuilder.add(runBlocking { user.uploadImage(it.fileStream) }) }
+        }
+
+        if (message.isNotBlank())
+            chainBuilder.add(message)
+
+        val msg = runBlocking { user.sendMessage(chainBuilder.asMessageChain()) }
+        val id = runBlocking { msg.sourceId }
+
+        return msg.toBotMessage(id, message)
+    }
+
+    fun deleteMessage(chatId: Long, messageId: Long, messageFrom: MessageFrom) {
+
+    }
+
+    fun kickUser(chatId: Long, userId: Long) {
 
     }
 
@@ -119,6 +136,8 @@ internal class MiraiMessager(private val context: MiraiBot): Logging, AutoClosea
         this.subscribeMessages {
             // 当接收到消息 == "你好" 时就回复 "你好!"
             "你好" reply "你好!"
+
+
 
             // 当消息 == "查看 subject" 时, 执行 lambda
             case("查看 subject") {
@@ -143,8 +162,9 @@ internal class MiraiMessager(private val context: MiraiBot): Logging, AutoClosea
                 // it: String (MessageChain.toString)
 
 
+
                 // message[Image].download() // 还未支持 download
-                if (this is GroupMessage) {
+                  if (this is GroupMessage) {
                     //如果是群消息
                     // group: Group
                     this.group.sendMessage("你在一个群里")

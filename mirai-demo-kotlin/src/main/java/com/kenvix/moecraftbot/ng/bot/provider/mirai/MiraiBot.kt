@@ -57,36 +57,26 @@ class MiraiBot: AbstractBotProvider<MiraiOptions>() {
     private val apiUrl: String
             get() = "http://localhost:${options.mirai.port}"
 
-    override fun sendMessage(chatId: Long, message: String, type: MessageType, replyToMessageId: Long?, messageFrom: MessageFrom): BotMessage
-        = messager.sendMessage(chatId, message, type, replyToMessageId, messageFrom)
+    override fun sendMessage(chatId: Long, message: String, type: MessageType,
+                             replyToMessageId: Long?, messageFrom: MessageFrom, extraData: BotExtraData?): BotMessage
+        = messager.sendMessage(chatId, message, type, replyToMessageId, messageFrom, extraData)
 
-    override fun banUser(chatId: Long, userId: Long, duration: Int) {
-        super.banUser(chatId, userId, duration)
-    }
-
-    override fun deleteMessage(chatId: Long, messageId: Long) {
-        super.deleteMessage(chatId, messageId)
+    override fun banUser(chatId: Long, userId: Long, duration: Int, messageFrom: MessageFrom) {
+        super.banUser(chatId, userId, duration, messageFrom)
 
     }
 
-    override fun kickUser(chatId: Long, userId: Long) {
-        super.kickUser(chatId, userId)
+    override fun deleteMessage(chatId: Long, messageId: Long, messageFrom: MessageFrom) {
+        super.deleteMessage(chatId, messageId, messageFrom)
+        messager.deleteMessage(chatId, messageId, messageFrom)
     }
 
-    override fun muteUser(chatId: Long, userId: Long, duration: Int) {
-        super.muteUser(chatId, userId, duration)
+    override fun kickUser(chatId: Long, userId: Long, messageFrom: MessageFrom) {
+        super.kickUser(chatId, userId, messageFrom)
     }
 
-    override fun onCommand(update: BotUpdate<*>, commandText: String) {
-        super.onCommand(update, commandText)
-    }
-
-    override fun onEvent(update: BotUpdate<*>, eventType: MessageType) {
-        super.onEvent(update, eventType)
-    }
-
-    override fun onUpgrade(newVersionCode: Int, oldVersionCode: Int) {
-        super.onUpgrade(newVersionCode, oldVersionCode)
+    override fun muteUser(chatId: Long, userId: Long, duration: Int, messageFrom: MessageFrom) {
+        super.muteUser(chatId, userId, duration, messageFrom)
     }
 
     override fun onSystemConsoleInput(input: String): Boolean {
